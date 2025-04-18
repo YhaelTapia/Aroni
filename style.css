@@ -1,0 +1,32 @@
+.fondorosa{
+    background-color: rgb(197, 155, 188);
+    font-size: 100px;
+    font-style: italic;
+   font-family: Georgia;
+   color:black
+}
+img{
+    border-radius: solid 2px; 
+}
+.boto{
+    font-size: 20px;
+    padding: 15px 30px;
+}
+#tein{
+    size: 20px;
+}
+#p1{
+    font-size: 45px;
+    background-color: rgb(202, 151, 151);
+    color: black;
+    width: 700px;
+    height: 100px;
+
+}
+#p2{
+   font-size: 35px;
+    color: rgb(161, 11, 19);
+}
+#tein{
+    font-size: 30px;
+}
