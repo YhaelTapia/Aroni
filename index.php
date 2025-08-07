@@ -225,16 +225,22 @@ if (!$is_all_tournaments_view) {
                     </div>
                     <div id="bracket-view" class="hidden">
                         <div class="bracket-header">
+                            <!-- SOLUCIÓN 1: Cambiamos la clase para que coincida con "Cerrar Sesión" -->
                             <button id="bracket-back-btn" class="btn-primary">&larr; Regresar</button>
                             <h2 id="bracket-title" style="text-align: center; flex-grow: 1;"></h2>
                         </div>
                         <div id="bracket-rules"></div>
                         <div class="participant-header">
                             <h3 style="text-align: center;">PARTICIPANTES:</h3>
+                            <button id="delete-tournament-btn" class="btn-primary" style="display: none;">Eliminar Torneo</button>
                             <button id="start-tournament-btn" class="btn-primary" style="display: none;">Iniciar Torneo</button>
                         </div>
+
                         <div id="bracket-container">
-                            <!-- Bracket will be rendered here by JavaScript -->
+                            <!-- El bracket inicial de participantes (grid) se renderiza aquí -->
+                        </div>
+                        <div id="full-bracket-container" class="hidden">
+                            <!-- El bracket completo con rondas se renderizará aquí -->
                         </div>
                     </div>
                 </div>
@@ -350,6 +356,16 @@ if (!$is_all_tournaments_view) {
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // SOLUCIÓN DEFINITIVA: Detectar si la página se carga desde el Back-Forward Cache del navegador.
+            // Si es así, forzar una recarga completa para obtener siempre el estado más reciente del torneo.
+            window.addEventListener('pageshow', function(event) {
+                // event.persisted es true si la página se restauró de la caché.
+                if (event.persisted) {
+                    window.location.reload();
+                }
+            });
+
+
             const gameModes = {
                 'freefire': ['Clásico - Bermuda', 'Duelo de Escuadras', 'Lobo Solitario'],
                 'fortnite': ['Battle Royale', 'Zero Build', 'Creative'],
@@ -725,24 +741,13 @@ if (!$is_all_tournaments_view) {
             // --- Bracket Generation Logic ---
             const backButton = document.getElementById('bracket-back-btn');
             if (backButton) {
-                backButton.addEventListener('click', () => {
-                    const tournamentList = document.querySelector('#pending-tournaments .tournament-list');
-                    const bracketView = document.getElementById('bracket-view');
-
-                    // Hide bracket view
-                    bracketView.style.display = 'none';
-
-                    // Restore visibility of the list, title, and tabs
-                    tournamentList.style.display = 'block';
-                    document.querySelector('#tournament-view-container > h3').style.display = 'block';
-                    document.querySelector('#tournament-view-container > .tabs').style.display = 'flex';
-                });
+                // SOLUCIÓN: El botón "Regresar" ahora recargará la página para asegurar un estado limpio.
+                // Esto soluciona el problema de que la vista no se actualice correctamente.
+                backButton.addEventListener('click', () => window.location.reload());
             }
 
             const loggedInUserId = <?php echo json_encode(isset($_SESSION['usuario_id']) ? $_SESSION['usuario_id'] : null); ?>;
             const currentGameName = <?php echo json_encode($game_name); ?>;
-            let currentParticipants = [];
-            let currentTournamentCupo = 0;
             
             document.querySelectorAll('.view-bracket-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
@@ -754,52 +759,63 @@ if (!$is_all_tournaments_view) {
                     const bracketRules = document.getElementById('bracket-rules');
                     const bracketContainer = document.getElementById('bracket-container');
 
-                    fetch(`includes/get_inscritos.php?torneo_id=${tournamentId}`)
+                    // SOLUCIÓN DEFINITIVA: Añadir un parámetro único para forzar la recarga (cache busting)
+                    fetch(`includes/get_inscritos.php?torneo_id=${tournamentId}&_=${new Date().getTime()}`)
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                currentParticipants = data.inscritos; // Store participants
-                                currentTournamentCupo = data.torneo.cupo; // Store cupo
-
-                                // Hide main view elements
+                                // Ocultar la lista de torneos y mostrar la vista del bracket
                                 tournamentList.style.display = 'none';
                                 document.querySelector('#tournament-view-container > h3').style.display = 'none';
                                 document.querySelector('#tournament-view-container > .tabs').style.display = 'none';
-
-                                // Show bracket view
                                 bracketView.style.display = 'block';
+                                backButton.style.display = 'inline-block';
 
-                                // Populate Header
-                                bracketTitle.textContent = data.torneo.titulo;
-
-                                // Populate Details
+                                // Poblar datos comunes
+                                bracketTitle.textContent = 'Torneo de ' + currentGameName;
                                 const format = (data.torneo.modalidad || 'No especificado').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                                // Per user feedback, the game mode is extracted from the main title.
                                 let gameMode = data.torneo.titulo || 'No especificado';
                                 if (gameMode.toLowerCase().startsWith('torneo de ')) {
                                     gameMode = gameMode.substring(10);
                                 }
                                 gameMode = gameMode.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                                const rulesContent = data.torneo.reglas_personalizadas 
-                                    ? data.torneo.reglas_personalizadas.replace(/\n/g, '<br>') 
-                                    : (ruleDescriptions[data.torneo.reglas] || 'No hay reglas definidas.');
-                                
-                                const startButton = document.getElementById('start-tournament-btn');
-                                if (loggedInUserId && data.torneo.organizador_id == loggedInUserId) {
-                                    startButton.style.display = 'inline-block';
-                                } else {
-                                    startButton.style.display = 'none';
-                                }
+                                const rulesContent = data.torneo.reglas_personalizadas ? data.torneo.reglas_personalizadas.replace(/\n/g, '<br>') : (ruleDescriptions[data.torneo.reglas] || 'No hay reglas definidas.');
 
                                 bracketRules.innerHTML = `
                                     <p style="margin: 0 0 5px 0;"><strong style="color: var(--text-secondary);">Formato:</strong> ${format}</p>
-                                    <p style="margin: 0 0 10px 0;"><strong style="color: var(--text-secondary);">Modo de Juego:</strong> ${gameMode}</p>
-                                    <p><strong style="color: var(--text-secondary);">Reglas:</strong></p>
+                                    <p style="margin: 0 0 5px 0;"><strong style="color: var(--text-secondary);">Modo de Juego:</strong> ${gameMode}</p>
+                                    <p style="margin: 0 0 5px 0;"><strong style="color: var(--text-secondary);">Reglas:</strong></p>
                                     <div>${rulesContent}</div>
                                 `;
 
-                                // Render participant grid
-                                renderParticipantGrid(currentParticipants, currentTournamentCupo, bracketContainer);
+                                // SOLUCIÓN: Decidir qué vista mostrar basado en el estado del torneo
+                                if (data.torneo.estado === 'en_curso' || data.torneo.estado === 'finalizado') {
+                                    // Si el torneo ya inició, mostrar el bracket completo
+                                    document.getElementById('start-tournament-btn').style.display = 'none';
+                                    document.getElementById('delete-tournament-btn').style.display = 'none';
+                                    document.querySelector('.participant-header').style.display = 'none';
+                                    bracketContainer.style.display = 'none';
+                                    renderFullBracket(data);
+                                } else { // El torneo está 'abierto'
+                                    // Mostrar la lista de participantes y los botones de acción para el creador
+                                    document.querySelector('.participant-header').style.display = 'flex';
+                                    bracketContainer.style.display = 'grid';
+                                    document.getElementById('full-bracket-container').classList.add('hidden');
+                                    
+                                    const startButton = document.getElementById('start-tournament-btn');
+                                    const deleteButton = document.getElementById('delete-tournament-btn');
+                                    if (loggedInUserId && data.torneo.organizador_id == loggedInUserId) {
+                                        startButton.style.display = 'inline-block';
+                                        deleteButton.style.display = 'inline-block';
+                                    } else {
+                                        startButton.style.display = 'none';
+                                        deleteButton.style.display = 'none';
+                                    }
+                                    renderBracket(data.inscritos, data.torneo.cupo, bracketContainer);
+                                    deleteButton.onclick = () => deleteTournament(tournamentId);
+                                    startButton.onclick = () => startTournament(tournamentId);
+                                }
+
                             } else {
                                 alert(data.message);
                             }
@@ -808,9 +824,162 @@ if (!$is_all_tournaments_view) {
                 });
             });
 
-            function renderParticipantGrid(participants, cupo, container) {
+            function startTournament(torneo_id) {
+                if (!confirm('¿Estás seguro de que quieres iniciar el torneo? Una vez iniciado, no se podrán unir más participantes.')) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('torneo_id', torneo_id);
+
+                fetch('includes/iniciar_torneo.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        // Ocultar botones y la vista de participantes
+                        document.getElementById('start-tournament-btn').style.display = 'none';
+                        document.getElementById('delete-tournament-btn').style.display = 'none';
+                        document.querySelector('.participant-header').style.display = 'none';
+                        document.getElementById('bracket-container').style.display = 'none';
+                        // Ya no necesitamos un segundo fetch. Usamos los datos que nos devolvió iniciar_torneo.php
+                        renderFullBracket(data.data);
+                    } else {
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ocurrió un error al iniciar el torneo.');
+                });
+            }
+
+            function getRoundName(totalTeams, roundIndex) {
+                const teamsInRound = totalTeams / Math.pow(2, roundIndex);
+                if (teamsInRound <= 1) return 'Final';
+                if (teamsInRound === 2) return 'Semifinal';
+                if (teamsInRound === 4) return 'Cuartos de Final';
+                if (teamsInRound === 8) return 'Octavos de Final';
+                return `${teamsInRound / 2}avos de Final`;
+            }
+
+            function renderFullBracket(data) {
+                const container = document.getElementById('full-bracket-container');
+                container.innerHTML = ''; // Limpiar
+                container.classList.remove('hidden');
+
+                const scrollWrapper = document.createElement('div');
+                scrollWrapper.className = 'bracket-scroll-wrapper';
+
+                const renderArea = document.createElement('div');
+                renderArea.className = 'bracket-render-area';
+
+                // Mapear participantes y partidos por ID para un acceso rápido y eficiente.
+                const participantsMap = new Map((data.inscritos || []).map(p => [p.id, p]));
+                
+                // Pre-procesar partidos para añadirles la etiqueta de Grupo (A, B, C...)
+                const matchesMap = new Map();
+                let labelCounter = 0;
+                (data.partidos || []).forEach(p => {
+                    p.label = `Grupo ${String.fromCharCode(65 + labelCounter)}`;
+                    matchesMap.set(p.id, p);
+                    labelCounter++;
+                });
+
+                // Agrupar partidos por ronda
+                const rounds = (data.partidos || []).reduce((acc, match) => {
+                    acc[match.ronda] = acc[match.ronda] || [];
+                    acc[match.ronda].push(match);
+                    return acc;
+                }, {});
+
+                const totalRounds = Object.keys(rounds).length;
+                const totalParticipants = parseInt(data.torneo.cupo, 10) || data.inscritos.length;
+
+                for (let i = 1; i <= totalRounds; i++) {
+                    const roundColumn = document.createElement('div');
+                    roundColumn.className = 'round-column';
+
+                    const roundTitle = document.createElement('div');
+                    roundTitle.className = 'round-title';
+                    roundTitle.textContent = getRoundName(totalParticipants, i - 1);
+                    roundColumn.appendChild(roundTitle);
+
+                    const matchesInThisRound = rounds[i] || [];
+
+                    matchesInThisRound.forEach(matchData => {
+                        const match = document.createElement('div');
+                        match.className = 'match';
+                        match.dataset.matchId = matchData.id;
+
+                        // Añadir la etiqueta del Grupo (A, B, C...)
+                        const matchLabel = document.createElement('div');
+                        matchLabel.className = 'match-label';
+                        matchLabel.textContent = matchData.label;
+                        match.appendChild(matchLabel);
+
+                                                // Determinar Participante 1
+                                                let p1 = participantsMap.get(parseInt(matchData.participante1_id));
+                        if (!p1 && matchData.fuente_partido1_id) {
+                            const sourceMatch = matchesMap.get(parseInt(matchData.fuente_partido1_id));
+                            // SOLUCIÓN: Verificar que el partido fuente existe antes de intentar usarlo.
+                            if (sourceMatch) {
+                                p1 = { id: -1, nombre_usuario: `Ganador de ${sourceMatch.label}` };
+                            }
+                        }
+
+                        // Determinar Participante 2
+                        let p2 = participantsMap.get(parseInt(matchData.participante2_id));
+                        if (!p2 && matchData.fuente_partido2_id) {
+                            const sourceMatch = matchesMap.get(parseInt(matchData.fuente_partido2_id));
+                            if (sourceMatch) {
+                                p2 = { id: -1, nombre_usuario: `Ganador de ${sourceMatch.label}` };
+                            }
+                        } else if (!p2 && matchData.participante1_id && !matchData.fuente_partido2_id) {
+                            p2 = { id: -1, nombre_usuario: 'BYE' };
+                        }
+
+
+
+                        match.appendChild(createParticipantElement(p1));
+                        match.appendChild(createParticipantElement(p2));
+                        roundColumn.appendChild(match);
+                    });
+
+                    renderArea.appendChild(roundColumn);
+                }
+                scrollWrapper.appendChild(renderArea);
+                container.appendChild(scrollWrapper);
+            }
+
+            function deleteTournament(torneo_id) {
+                if (confirm('¿Estás seguro de que quieres eliminar este torneo? Esta acción no se puede deshacer.')) {
+                    const formData = new FormData();
+                    formData.append('torneo_id', torneo_id);
+
+                    fetch('includes/eliminar_torneo.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        if (data.success) {
+                            location.reload();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Ocurrió un error al intentar eliminar el torneo.');
+                    });
+                }
+            }
+
+            function renderBracket(participants, cupo, container) {
                 container.innerHTML = ''; // Clear previous content
-                container.className = 'participant-grid'; // Use a specific class for the grid layout
                 const numSlots = parseInt(cupo, 10);
 
                 for (let i = 0; i < numSlots; i++) {
@@ -819,7 +988,7 @@ if (!$is_all_tournaments_view) {
                     container.appendChild(participantEl);
                 }
             }
-
+            
             function createParticipantElement(participant) {
                 // This function handles both filled and empty slots
                 if (!participant) {
@@ -841,120 +1010,6 @@ if (!$is_all_tournaments_view) {
                 el.appendChild(img);
                 el.appendChild(name);
                 return el;
-            }
-
-            // --- New Bracket Generation Logic ---
-            const startBtn = document.getElementById('start-tournament-btn');
-            if (startBtn) {
-                startBtn.addEventListener('click', () => {
-                    // We already have participants and cupo from the 'view-bracket' logic
-                    generateBracket(currentParticipants, currentTournamentCupo, document.getElementById('bracket-container'));
-                    startBtn.style.display = 'none'; // Hide button after starting
-                });
-            }
-
-            function shuffleArray(array) {
-                for (let i = array.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [array[i], array[j]] = [array[j], array[i]]; // Swap elements
-                }
-                return array;
-            }
-
-            function generateBracket(participants, cupo, container) {
-                container.innerHTML = '';
-                container.className = 'bracket';
-
-                const shuffledParticipants = shuffleArray([...participants]);
-                const numPlayers = parseInt(cupo, 10);
-
-                // For 1v1, just show the two players in a single match
-                if (numPlayers === 2) {
-                    const round = document.createElement('div');
-                    round.className = 'round';
-                    const match = document.createElement('div');
-                    match.className = 'match';
-                    match.appendChild(createParticipantElement(shuffledParticipants[0]));
-                    match.appendChild(createParticipantElement(shuffledParticipants[1]));
-                    round.appendChild(match);
-                    container.appendChild(round);
-                    return;
-                }
-
-                const rounds = [];
-                const numRounds = Math.log2(numPlayers);
-
-                // Create the initial round with all participants
-                let currentRoundPlayers = [...shuffledParticipants];
-                // Add "bye" slots if participants are fewer than cupo
-                while(currentRoundPlayers.length < numPlayers) {
-                    currentRoundPlayers.push(null);
-                }
-
-                const firstRound = document.createElement('div');
-                firstRound.className = 'round';
-
-                for (let i = 0; i < numPlayers; i += 2) {
-                    const match = document.createElement('div');
-                    match.className = 'match';
-                    match.appendChild(createParticipantElement(currentRoundPlayers[i]));
-                    // Handle the case where the last participant is alone
-                    const opponent = (i + 1 < numPlayers) ? currentRoundPlayers[i + 1] : null;
-                    match.appendChild(createParticipantElement(opponent));
-                    firstRound.appendChild(match);
-                }
-                rounds.push(firstRound);
-
-                // Generate subsequent rounds with placeholders
-                let matchesInCurrentRound = numPlayers / 2;
-                for (let i = 1; i < numRounds; i++) {
-                    const round = document.createElement('div');
-                    round.className = 'round';
-                    matchesInCurrentRound /= 2;
-                    for (let j = 0; j < matchesInCurrentRound; j++) {
-                        const match = document.createElement('div');
-                        match.className = 'match';
-                        // Create placeholder elements for future winners
-                        match.appendChild(createParticipantElement(null)); 
-                        match.appendChild(createParticipantElement(null)); 
-                        round.appendChild(match);
-                    }
-                    rounds.push(round);
-                }
-                
-                // Split rounds for the two-sided bracket
-                const leftRounds = [];
-                const rightRounds = [];
-                const finalRound = rounds[rounds.length - 1];
-
-                for(let i = 0; i < rounds.length - 1; i++) {
-                    const round = rounds[i];
-                    const matches = Array.from(round.children);
-                    const half = Math.ceil(matches.length / 2);
-                    
-                    const leftRound = document.createElement('div');
-                    leftRound.className = 'round';
-                    matches.slice(0, half).forEach(m => leftRound.appendChild(m));
-                    leftRounds.push(leftRound);
-
-                    const rightRound = document.createElement('div');
-                    rightRound.className = 'round';
-                    matches.slice(half).forEach(m => rightRound.appendChild(m));
-                    rightRounds.push(rightRound);
-                }
-
-                // Assemble the final bracket structure
-                const leftContainer = document.createElement('div');
-                leftContainer.className = 'bracket-side left';
-                leftRounds.forEach(r => leftContainer.appendChild(r));
-
-                const rightContainer = document.createElement('div');
-                rightContainer.className = 'bracket-side right';
-                rightRounds.reverse().forEach(r => rightContainer.appendChild(r)); // Reverse for correct order
-
-                container.appendChild(leftContainer);
-                container.appendChild(finalRound);
-                container.appendChild(rightContainer);
             }
 
 
