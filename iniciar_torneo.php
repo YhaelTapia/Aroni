@@ -18,11 +18,13 @@ $usuario_id = $_SESSION['usuario_id'];
 $torneo_id = (int)$_POST['torneo_id'];
 
 // 2. Verificar permisos y estado del torneo
-$stmt_check = $conn->prepare("SELECT organizador_id, estado FROM torneos WHERE id = ?");
+// --- MODIFICADO: Obtener también el 'cupo' del torneo ---
+$stmt_check = $conn->prepare("SELECT organizador_id, estado, cupo FROM torneos WHERE id = ?");
 $stmt_check->bind_param("i", $torneo_id);
 $stmt_check->execute();
 $result_check = $stmt_check->get_result();
 $torneo = $result_check->fetch_assoc();
+$cupo = (int)($torneo['cupo'] ?? 0);
 
 if (!$torneo || $torneo['organizador_id'] != $usuario_id) {
     echo json_encode(['success' => false, 'message' => 'No tienes permiso para iniciar este torneo.']);
@@ -30,6 +32,11 @@ if (!$torneo || $torneo['organizador_id'] != $usuario_id) {
 }
 if ($torneo['estado'] !== 'abierto') {
     echo json_encode(['success' => false, 'message' => 'Este torneo ya no está abierto.']);
+    exit();
+}
+// --- NUEVO: Validar que el cupo sea una potencia de 2 para un bracket de eliminación simple ---
+if ($cupo <= 1 || ($cupo & ($cupo - 1)) !== 0) {
+    echo json_encode(['success' => false, 'message' => 'El cupo del torneo debe ser una potencia de 2 (ej. 2, 4, 8, 16...).']);
     exit();
 }
 
@@ -50,47 +57,36 @@ if (count($inscritos) < 2) {
     exit();
 }
 
-// --- NUEVO: Lógica de Patrones de Emparejamiento ---
-
-// Seleccionar un patrón de emparejamiento al azar para dar variedad a los torneos.
+// --- Lógica de Patrones de Emparejamiento ---
 $patrones = ['aleatorio', 'clasificado'];
 $patron_elegido = $patrones[array_rand($patrones)];
-
-$participantes_ordenados = [];
+$participantes_para_bracket = [];
 
 switch ($patron_elegido) {
     case 'clasificado':
-        // Ordenar por "seed" (ej: ratio de victorias) de mejor a peor.
-        // Esto emparejará a los jugadores más fuertes con los más débiles en la primera ronda.
         usort($inscritos, function ($a, $b) {
-            // Calcular ratio de victorias, manejar división por cero.
             $ratio_a = ($a['victorias'] + $a['derrotas'] > 0) ? $a['victorias'] / ($a['victorias'] + $a['derrotas']) : 0;
             $ratio_b = ($b['victorias'] + $b['derrotas'] > 0) ? $b['victorias'] / ($b['victorias'] + $b['derrotas']) : 0;
-            
             if ($ratio_a == $ratio_b) return 0;
-            return ($ratio_a > $ratio_b) ? -1 : 1; // Orden descendente.
+            return ($ratio_a > $ratio_b) ? -1 : 1;
         });
-        
-        // Reordenar la lista para emparejar el primero con el último, el segundo con el penúltimo, etc.
-        $jugadores = $inscritos;
-        while(count($jugadores) > 0) {
-            $participantes_ordenados[] = array_shift($jugadores); // Saca el mejor.
-            if (count($jugadores) > 0) {
-                $participantes_ordenados[] = array_pop($jugadores); // Saca el peor.
-            }
-        }
+        $participantes_para_bracket = $inscritos;
         break;
     
     default: // 'aleatorio'
-        shuffle($inscritos); // Mezcla completamente al azar.
-        $participantes_ordenados = $inscritos;
+        shuffle($inscritos);
+        $participantes_para_bracket = $inscritos;
         break;
 }
+
+// --- NUEVO: Rellenar la lista de participantes hasta el tamaño del cupo con nulls ---
+$full_participant_list = array_pad($participantes_para_bracket, $cupo, null);
+
 
 $conn->begin_transaction();
 
 try {
-    // 4. (NUEVO) Limpiar partidos existentes para este torneo por si acaso
+    // 4. Limpiar partidos existentes para este torneo por si acaso
     $stmt_clean = $conn->prepare("DELETE FROM partidos WHERE torneo_id = ?");
     $stmt_clean->bind_param("i", $torneo_id);
     $stmt_clean->execute();
@@ -100,8 +96,6 @@ try {
     $stmt_update->bind_param("i", $torneo_id);
     $stmt_update->execute();
 
-    // VERIFICACIÓN ADICIONAL: Asegurarse de que la fila fue actualizada.
-    // Si affected_rows no es 1, significa que el estado no cambió (quizás otro admin lo inició).
     if ($stmt_update->affected_rows !== 1) {
         throw new Exception("No se pudo actualizar el estado del torneo. Puede que ya estuviera iniciado.");
     }
@@ -109,46 +103,70 @@ try {
     // 6. Generar la estructura completa del bracket
     $partidos_ronda_anterior = [];
 
-    // --- Ronda 1: Crear partidos con los participantes reales ---
-    $stmt_ronda1 = $conn->prepare("INSERT INTO partidos (torneo_id, ronda, numero_partido_ronda, participante1_id, participante2_id) VALUES (?, 1, ?, ?, ?)");
-    for ($i = 0; $i < count($participantes_ordenados); $i += 2) {
-        $p1_id = $participantes_ordenados[$i]['usuario_id'];
-        $p2_id = isset($participantes_ordenados[$i + 1]) ? $participantes_ordenados[$i + 1]['usuario_id'] : null;
-        $num_partido_ronda = ($i / 2) + 1;
-        $stmt_ronda1->bind_param("iiii", $torneo_id, $num_partido_ronda, $p1_id, $p2_id);
+    // --- RECONSTRUIDO: Ronda 1 basada en el CUPO ---
+    $stmt_ronda1 = $conn->prepare("INSERT INTO partidos (torneo_id, ronda, numero_partido_ronda, participante1_id, participante2_id, ganador_id) VALUES (?, 1, ?, ?, ?, ?)");
+    $numero_de_partidos_ronda1 = $cupo / 2;
+
+    for ($i = 0; $i < $numero_de_partidos_ronda1; $i++) {
+        // Emparejamiento estándar: 1 vs N, 2 vs N-1, etc.
+        $p1_data = $full_participant_list[$i];
+        $p2_data = $full_participant_list[$cupo - 1 - $i];
+        
+        $p1_id = $p1_data ? $p1_data['usuario_id'] : null;
+        $p2_id = $p2_data ? $p2_data['usuario_id'] : null;
+        
+        $ganador_id = null;
+        if ($p1_id && !$p2_id) {
+            $ganador_id = $p1_id; // p1 gana por BYE
+        }
+        if (!$p1_id && $p2_id) {
+            $ganador_id = $p2_id; // p2 gana por BYE (caso raro, pero posible)
+        }
+        
+        $num_partido_ronda = $i + 1;
+        $stmt_ronda1->bind_param("iiiii", $torneo_id, $num_partido_ronda, $p1_id, $p2_id, $ganador_id);
         $stmt_ronda1->execute();
-        $partidos_ronda_anterior[] = $conn->insert_id; // Guardar el ID del partido creado
+        $partidos_ronda_anterior[] = $conn->insert_id;
     }
     $stmt_ronda1->close();
 
-    // --- Rondas Siguientes: Crear partidos placeholder vinculados ---
+    // --- RECONSTRUIDO: Rondas Siguientes con manejo de ganadores por BYE ---
     $ronda_actual = 2;
-    $stmt_rondas_siguientes = $conn->prepare("INSERT INTO partidos (torneo_id, ronda, numero_partido_ronda, fuente_partido1_id, fuente_partido2_id) VALUES (?, ?, ?, ?, ?)");
+    $stmt_rondas_siguientes = $conn->prepare("INSERT INTO partidos (torneo_id, ronda, numero_partido_ronda, participante1_id, participante2_id, ganador_id, fuente_partido1_id, fuente_partido2_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
 
     while (count($partidos_ronda_anterior) > 1) {
         $partidos_ronda_actual = [];
         for ($i = 0; $i < count($partidos_ronda_anterior); $i += 2) {
             $fuente1_id = $partidos_ronda_anterior[$i];
-            // Si hay un número impar de partidos en la ronda anterior, el último pasa con BYE
             $fuente2_id = isset($partidos_ronda_anterior[$i + 1]) ? $partidos_ronda_anterior[$i + 1] : null;
             $num_partido_ronda = ($i / 2) + 1;
 
-            $stmt_rondas_siguientes->bind_param("iiiii", $torneo_id, $ronda_actual, $num_partido_ronda, $fuente1_id, $fuente2_id);
-            $stmt_rondas_siguientes->execute();
-            $nuevo_partido_id = $conn->insert_id; // Guardar el ID del nuevo partido en una variable
-            $partidos_ronda_actual[] = $nuevo_partido_id;
+            // Obtener ganadores de partidos anteriores si ya existen (por BYE)
+            $stmt_check_winner = $conn->prepare("SELECT ganador_id FROM partidos WHERE id = ?");
+            
+            $p1_new = null;
+            $stmt_check_winner->bind_param("i", $fuente1_id);
+            $stmt_check_winner->execute();
+            $result1 = $stmt_check_winner->get_result()->fetch_assoc();
+            if ($result1) $p1_new = $result1['ganador_id'];
 
-            // Si un partido tuvo un BYE, su ganador avanza automáticamente a la siguiente ronda
-            if ($fuente2_id === null) {
-                $stmt_get_ganador_bye = $conn->prepare("SELECT participante1_id FROM partidos WHERE id = ?");
-                $stmt_get_ganador_bye->bind_param("i", $fuente1_id);
-                $stmt_get_ganador_bye->execute();
-                $ganador_bye_id = $stmt_get_ganador_bye->get_result()->fetch_assoc()['participante1_id'];
-
-                $stmt_avanzar_ganador = $conn->prepare("UPDATE partidos SET participante1_id = ? WHERE id = ?");
-                $stmt_avanzar_ganador->bind_param("ii", $ganador_bye_id, $nuevo_partido_id); // Usar la variable aquí
-                $stmt_avanzar_ganador->execute();
+            $p2_new = null;
+            if ($fuente2_id) {
+                $stmt_check_winner->bind_param("i", $fuente2_id);
+                $stmt_check_winner->execute();
+                $result2 = $stmt_check_winner->get_result()->fetch_assoc();
+                if ($result2) $p2_new = $result2['ganador_id'];
             }
+            
+            $ganador_id_new = null;
+            if ($p1_new && !$fuente2_id) { // BYE estructural en esta ronda
+                $ganador_id_new = $p1_new;
+            }
+
+            // Insertar el nuevo partido placeholder
+            $stmt_rondas_siguientes->bind_param("iiiiiiii", $torneo_id, $ronda_actual, $num_partido_ronda, $p1_new, $p2_new, $ganador_id_new, $fuente1_id, $fuente2_id);
+            $stmt_rondas_siguientes->execute();
+            $partidos_ronda_actual[] = $conn->insert_id;
         }
         $partidos_ronda_anterior = $partidos_ronda_actual;
         $ronda_actual++;

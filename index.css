@@ -666,11 +666,6 @@ body {
 }
 
 /* Show dot when checked */
-.create-form .radio-group input[type="radio"]:checked ~ .checkmark:after {
-    display: block;
-}
-
-/* Change background on check */
 .create-form .radio-group input[type="radio"]:checked ~ .checkmark {
     background-color: var(--neon-white);
     box-shadow: 0 0 5px var(--neon-white);
@@ -784,6 +779,7 @@ body {
     grid-template-columns: repeat(5, 1fr);
     gap: 15px;
     justify-content: center;
+    margin-top: 20px;
 }
 
 @keyframes glowing-border {
@@ -799,12 +795,12 @@ body {
     padding: 10px;
     display: flex;
     align-items: center;
-    width: auto; /* Let grid control the width */
-    min-height: 62px; /* Set a min-height to keep slots consistent */
+    width: auto;
+    min-height: 62px;
     box-shadow: 0 0 5px rgba(30, 144, 255, 0.5);
     box-sizing: border-box;
-    color: var(--text-secondary); /* Default text color for empty slots */
-    justify-content: center; /* Center text in empty slots */
+    color: var(--text-secondary);
+    justify-content: center;
 }
 
 .participant.current-user {
@@ -826,21 +822,32 @@ body {
 /* New Bracket View Styles */
 .bracket-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 15px;
     margin-bottom: 20px;
+}
+
+.bracket-header > #bracket-back-btn {
+    flex-shrink: 0;
+}
+
+.bracket-header > h2 {
+    flex-grow: 1;
+    text-align: center;
+    margin: 0;
 }
 
 #bracket-rules {
     max-width: 70%;
     margin-bottom: 20px;
     line-height: 1.6;
-    word-wrap: break-word; /* Ensure long words break */
+    word-wrap: break-word;
 }
 
 .participant-header {
     position: relative;
     margin-bottom: 15px;
+    text-align: center;
 }
 
 #start-tournament-btn {
@@ -849,82 +856,309 @@ body {
     right: 0;
 }
 
-/* --- Estilos para el Bracket de Torneo --- */
+/* --- Estilos para el Bracket de Torneo (Revisado para JS) --- */
+#full-bracket-container {
+    position: relative;
+    padding-top: 60px; /* Make space for controls */
+}
+
 .bracket-scroll-wrapper {
     width: 100%;
-    overflow: auto; /* Habilita scroll si el contenido es muy grande */
-    background-color: #1a1a2e; /* Fondo oscuro para el área del bracket */
-    max-height: 75vh; /* SOLUCIÓN: Altura máxima para evitar deformar el contenedor principal */
+    overflow: auto;
+    background-color: #1a1a2e;
+    max-height: 75vh;
     border: 1px solid #4e4e7a;
     border-radius: 8px;
     padding: 20px;
     box-sizing: border-box;
+    transition: all 0.3s ease-in-out;
 }
 
-.bracket-render-area {
+.bracket-render-area, .bracket-split-view {
     display: flex;
     flex-direction: row;
-    gap: 60px; /* Espacio entre rondas */
-    min-width: fit-content; /* Asegura que el contenedor se expanda */
+    gap: 80px;
+    min-width: fit-content;
+    align-items: flex-start;
+    position: relative;
 }
 
 .round-column {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around; /* Distribuye los partidos verticalmente */
-    gap: 30px; /* Espacio entre partidos */
+    display: block;
+    flex-shrink: 0;
+    position: relative;
+    width: 180px;
 }
 
 .round-title {
     color: #e0e0e0;
     text-align: center;
     font-weight: bold;
-    margin-bottom: 20px;
     white-space: nowrap;
+    width: 100%;
+    /* This will now be positioned by JS */
 }
 
 .match {
-    position: relative;
+    position: absolute;
+    left: 0;
     background-color: #2c2c54;
     border-radius: 5px;
-    padding: 15px 10px 10px 10px; /* Aumentar padding superior para la etiqueta */
-    margin-top: 15px; /* Espacio para la etiqueta */
+    padding: 10px;
     display: flex;
     flex-direction: column;
     gap: 5px;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 1;
 }
 
 .match-label {
     position: absolute;
-    top: -20px; /* Posicionar la etiqueta encima del partido */
+    top: -25px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 0.8em;
     color: var(--text-secondary);
 }
 
-/* Líneas conectoras */
-.match:not(:last-child)::before { /* Línea vertical que une a los dos de abajo */
-    content: '';
+.connector {
     position: absolute;
     background-color: #4e4e7a;
-    width: 1px;
-    height: calc(100% + 30px); /* Altura del partido + gap */
-    top: 50%;
-    left: -30px; /* Mitad del gap entre rondas */
+    z-index: 0;
 }
 
-.match::after { /* Línea horizontal que sale de cada partido */
+/* Estilo para botones "peligrosos" como eliminar */
+#delete-tournament-btn[data-danger="true"] {
+    background: linear-gradient(45deg, var(--error-color), #ff6e4a);
+    box-shadow: 0 0 15px rgba(255, 77, 77, 0.5);
+}
+
+#delete-tournament-btn[data-danger="true"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(255, 77, 77, 0.8);
+}
+
+#full-bracket-container > #delete-tournament-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px; /* User request: move to top right */
+    z-index: 10;
+}
+
+
+/* --- Estilos para el Bracket Dividido (>= 16 jugadores) --- */
+.bracket-split-view {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.bracket-side {
+    display: flex;
+    flex-direction: row;
+    gap: 60px;
+}
+
+.bracket-side.final {
+    flex-shrink: 0;
+    padding: 0 30px;
+}
+
+.bracket-side.right {
+    flex-direction: row-reverse;
+}
+
+/* --- Estilos para los Controles de Vista del Bracket --- */
+.bracket-area-title {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+.bracket-header .bracket-view-controls {
+    display: none; /* Hide controls when they are in the main header */
+}
+
+#full-bracket-container > .bracket-view-controls {
+    display: flex; /* Show them only when they've been moved */
+    position: absolute;
+    top: 10px;
+    left: 15px; /* User request: move to top left */
+    z-index: 10;
+    gap: 5px;
+    background-color: rgba(0,0,0,0.2);
+    padding: 5px;
+    border-radius: 8px;
+}
+
+.bracket-view-controls button {
+    padding: 5px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-width: 1px;
+}
+
+.bracket-view-controls button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.bracket-view-controls button.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.bracket-view-controls button.active:hover {
+    color: var(--text-primary);
+    background: var(--accent-primary);
+}
+
+/* New styles for relocated elements */
+.btn-danger {
+    background: var(--error-color);
+    border: none;
+    color: var(--text-primary);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 15px rgba(255, 77, 77, 0.5);
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(255, 77, 77, 0.8);
+}
+
+#bracket-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+#bracket-controls h3 {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.zoom-controls button {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1.2em;
+    margin-left: 5px;
+}
+
+#bracket-container-wrapper {
+    width: 100%;
+    overflow-x: auto; /* Enable horizontal scrolling */
+    padding: 10px;
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    min-height: 400px; /* Give it some default height */
+}
+
+#bracket-container {
+    /* Resetting styles that were previously on the container */
+    display: flex; /* Changed from grid to flex for the new layout */
+    gap: 50px; /* Space between rounds or sides */
+    align-items: flex-start; /* Align items to the top for consistent title alignment */
+    min-width: fit-content; /* Allow container to grow */
+    padding: 20px 0;
+    margin-top: 0; /* Reset margin */
+    transform-origin: top left; /* Make zoom feel more natural */
+    transition: transform 0.3s ease;
+}
+
+/* --- Bracket Rendering --- */
+
+.bracket-side {
+    display: flex;
+    gap: 50px;
+}
+
+.bracket-side.final {
+    align-self: center; /* Center the final column vertically */
+}
+
+.bracket-side.right {
+    flex-direction: row-reverse;
+}
+
+.round-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 200px; /* Give rounds a fixed width */
+}
+
+.round-title {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 1.1em;
+    margin-bottom: 30px; /* Space between title and first match */
+    text-align: center;
+}
+
+.round {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around; /* Distribute matches evenly */
+    flex-grow: 1;
+    width: 100%;
+    gap: 40px; /* Vertical gap between matches */
+}
+
+.match {
+    background-color: var(--card-bg);
+    border-radius: 5px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Space between the two participants */
+    position: relative;
+}
+
+/* This is a pseudo-element to draw connector lines. It's complex. */
+.match::after {
     content: '';
     position: absolute;
-    background-color: #4e4e7a;
-    width: 30px; /* Mitad del gap entre rondas */
+    width: 25px; /* Half the gap between rounds */
     height: 1px;
-    top: 50%;
-    right: -30px;
+    background-color: var(--text-secondary);
 }
 
-/* Ocultar la última línea que apunta a la nada */
-.round-column:last-child .match::after {
+/* Right-pointing connectors for left-side matches */
+.left .match::after {
+    right: -25px;
+    top: 50%;
+}
+
+/* Left-pointing connectors for right-side matches */
+.right .match::after {
+    left: -25px;
+    top: 50%;
+}
+
+/* No connectors for the final match */
+.final .match::after {
     display: none;
 }
