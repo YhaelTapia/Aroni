@@ -6,9 +6,10 @@ if (modal) {
     const modalCloseBtn = document.getElementById('modal-close-btn');
     const modalJoinBtn = document.getElementById('modal-join-btn');
 
-    document.querySelectorAll('.view-details-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const tournamentItem = e.target.closest('.tournament-item');
+    document.addEventListener('click', function(e) {
+        const detailsButton = e.target.closest('.view-details-btn');
+        if (detailsButton) {
+            const tournamentItem = detailsButton.closest('.tournament-item');
             document.querySelectorAll('.tournament-item').forEach(item => item.classList.remove('selected-for-modal'));
             tournamentItem.classList.add('selected-for-modal');
             const details = JSON.parse(tournamentItem.dataset.details);
@@ -26,7 +27,7 @@ if (modal) {
             }
             modal.querySelector('#modal-rules').innerHTML = rulesHtml;
             modal.style.display = 'flex';
-        });
+        }
     });
 
     function hideModal() { modal.style.display = 'none'; }

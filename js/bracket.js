@@ -9,9 +9,10 @@ if (backButton) {
 const loggedInUserId = window.pageData.loggedInUserId;
 const currentGameName = window.pageData.gameName;
 
-document.querySelectorAll('.view-bracket-btn').forEach(button => {
-    button.addEventListener('click', (e) => {
-        const tournamentItem = e.target.closest('.tournament-item');
+document.addEventListener('click', function(e) {
+    const bracketButton = e.target.closest('.view-bracket-btn');
+    if (bracketButton) {
+        const tournamentItem = bracketButton.closest('.tournament-item');
         const tournamentId = tournamentItem.dataset.id;
         fetch(`includes/get_inscritos.php?torneo_id=${tournamentId}&_=${new Date().getTime()}`)
             .then(response => response.json())
@@ -23,7 +24,7 @@ document.querySelectorAll('.view-bracket-btn').forEach(button => {
                 }
             })
             .catch(error => console.error('Error fetching bracket data:', error));
-    });
+    }
 });
 
 function showBracketView(tournamentId, data) {
