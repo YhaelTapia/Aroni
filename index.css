@@ -892,11 +892,10 @@ body {
 
 .round-title {
     color: #e0e0e0;
-    text-align: center;
+    text-align: center; /* Restore centering */
     font-weight: bold;
     white-space: nowrap;
     width: 100%;
-    /* This will now be positioned by JS */
 }
 
 .match {
@@ -982,12 +981,12 @@ body {
     font-weight: 600;
 }
 
-.bracket-header .bracket-view-controls {
-    display: none; /* Hide controls when they are in the main header */
+.bracket-view-controls {
+    display: none; /* Hidden by default */
 }
 
 #full-bracket-container > .bracket-view-controls {
-    display: flex; /* Show them only when they've been moved */
+    display: flex; /* Shown when moved */
     position: absolute;
     top: 10px;
     left: 15px; /* User request: move to top left */
@@ -1020,145 +1019,4 @@ body {
 .bracket-view-controls button.active:hover {
     color: var(--text-primary);
     background: var(--accent-primary);
-}
-
-/* New styles for relocated elements */
-.btn-danger {
-    background: var(--error-color);
-    border: none;
-    color: var(--text-primary);
-    padding: 10px 20px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.3s ease;
-    box-shadow: 0 0 15px rgba(255, 77, 77, 0.5);
-}
-
-.btn-danger:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0 25px rgba(255, 77, 77, 0.8);
-}
-
-#bracket-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding: 10px;
-    background-color: var(--bg-secondary);
-    border-radius: 8px;
-}
-
-#bracket-controls h3 {
-    margin: 0;
-    color: var(--text-secondary);
-}
-
-.zoom-controls button {
-    background-color: var(--card-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    width: 30px;
-    height: 30px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 1.2em;
-    margin-left: 5px;
-}
-
-#bracket-container-wrapper {
-    width: 100%;
-    overflow-x: auto; /* Enable horizontal scrolling */
-    padding: 10px;
-    background-color: var(--bg-secondary);
-    border-radius: 8px;
-    min-height: 400px; /* Give it some default height */
-}
-
-#bracket-container {
-    /* Resetting styles that were previously on the container */
-    display: flex; /* Changed from grid to flex for the new layout */
-    gap: 50px; /* Space between rounds or sides */
-    align-items: flex-start; /* Align items to the top for consistent title alignment */
-    min-width: fit-content; /* Allow container to grow */
-    padding: 20px 0;
-    margin-top: 0; /* Reset margin */
-    transform-origin: top left; /* Make zoom feel more natural */
-    transition: transform 0.3s ease;
-}
-
-/* --- Bracket Rendering --- */
-
-.bracket-side {
-    display: flex;
-    gap: 50px;
-}
-
-.bracket-side.final {
-    align-self: center; /* Center the final column vertically */
-}
-
-.bracket-side.right {
-    flex-direction: row-reverse;
-}
-
-.round-column {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 200px; /* Give rounds a fixed width */
-}
-
-.round-title {
-    color: var(--text-primary);
-    font-weight: 600;
-    font-size: 1.1em;
-    margin-bottom: 30px; /* Space between title and first match */
-    text-align: center;
-}
-
-.round {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around; /* Distribute matches evenly */
-    flex-grow: 1;
-    width: 100%;
-    gap: 40px; /* Vertical gap between matches */
-}
-
-.match {
-    background-color: var(--card-bg);
-    border-radius: 5px;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px; /* Space between the two participants */
-    position: relative;
-}
-
-/* This is a pseudo-element to draw connector lines. It's complex. */
-.match::after {
-    content: '';
-    position: absolute;
-    width: 25px; /* Half the gap between rounds */
-    height: 1px;
-    background-color: var(--text-secondary);
-}
-
-/* Right-pointing connectors for left-side matches */
-.left .match::after {
-    right: -25px;
-    top: 50%;
-}
-
-/* Left-pointing connectors for right-side matches */
-.right .match::after {
-    left: -25px;
-    top: 50%;
-}
-
-/* No connectors for the final match */
-.final .match::after {
-    display: none;
 }

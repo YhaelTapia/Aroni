@@ -28,9 +28,15 @@ if (!$is_all_tournaments_view) {
 <head>
     <meta charset="UTF-8">
     <title>Inicio - MEENTNOVA</title>
-    <link rel="stylesheet" href="css/index.css?v=1.6">
+    <link rel="stylesheet" href="css/index.css?v=1.3">
     <script src="https://unpkg.com/feather-icons"></script>
-    <script src="js/index.js"></script> <!-- Enlace al archivo index.js -->
+    <script>
+        window.pageData = {
+            gameSlug: '<?php echo $selected_game_slug; ?>',
+            gameName: <?php echo json_encode($game_name); ?>,
+            loggedInUserId: <?php echo json_encode(isset($_SESSION['usuario_id']) ? $_SESSION['usuario_id'] : null); ?>
+        };
+    </script>
 </head>
 <body>
 
@@ -154,7 +160,7 @@ if (!$is_all_tournaments_view) {
                             $sql_created .= " AND juego_id = ?";
                         }
                         $sql_created .= " ORDER BY fecha DESC";
-                        
+
                         if ($stmt_created = $conn->prepare($sql_created)) {
                             if (!$is_all_tournaments_view) {
                                 $stmt_created->bind_param("ii", $organizador_id, $game_id);
@@ -188,7 +194,7 @@ if (!$is_all_tournaments_view) {
                     <div class="tournament-list">
                         <?php
                         $usuario_id = isset($_SESSION['usuario_id']) ? $_SESSION['usuario_id'] : 0;
-                        $sql_pending = "SELECT t.id, t.titulo, t.modalidad, t.cupo, t.reglas, t.reglas_personalizadas 
+                        $sql_pending = "SELECT t.id, t.titulo, t.modalidad, t.cupo, t.reglas, t.reglas_personalizadas
                                         FROM torneos t
                                         JOIN inscripciones i ON t.id = i.torneo_id
                                         WHERE i.usuario_id = ?";
@@ -227,7 +233,7 @@ if (!$is_all_tournaments_view) {
                         <div class="bracket-header">
                             <button id="bracket-back-btn" class="btn-primary">&larr; Regresar</button>
                             <h2 id="bracket-title" style="text-align: center; flex-grow: 1;"></h2>
-                            <div class="bracket-view-controls" style="display: none;">
+                            <div class="bracket-view-controls">
                                 <button id="view-normal-btn" class="btn-secondary active" title="Vista Normal"><i data-feather="zoom-in"></i></button>
                                 <button id="view-full-btn" class="btn-secondary" title="Vista Completa"><i data-feather="zoom-out"></i></button>
                                 <button id="view-wide-btn" class="btn-secondary" title="Vista Ancha"><i data-feather="maximize-2"></i></button>
@@ -357,6 +363,13 @@ if (!$is_all_tournaments_view) {
             </div>
         </aside>
     </div>
+
+    <script src="js/ui.js" defer></script>
+    <script src="js/tournament-form.js" defer></script>
+    <script src="js/tournament-modal.js" defer></script>
+    <script src="js/bracket.js" defer></script>
+    <script src="js/index.js" defer></script>
+
     <!-- Tournament Details Modal -->
     <div id="tournament-details-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
